@@ -1,13 +1,12 @@
 # ImgFlow – Nền tảng xử lý ảnh sản phẩm bất đồng bộ trên AWS
 
-Bài tập lớn INT3319 – Điện toán đám mây. Region: **Sydney (ap-southeast-2)**
-(Singapore bị tổ chức chặn nên không dùng được).
+Bài tập lớn INT3319 – Điện toán đám mây. Region: **Sydney (ap-southeast-2)**.
 
 Luồng: Web (ALB + ASG) cấp presigned URL → trình duyệt upload ảnh lên S3 →
 S3 event → SQS → Worker (ASG, Pillow, đọc logo từ EFS) → S3 processed →
 CloudFront. Trạng thái job lưu trong RDS PostgreSQL.
 
-## Cấu trúc repo và ai làm gì
+## Cấu trúc repo
 
 ```
 imgflow/
