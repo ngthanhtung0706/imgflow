@@ -21,7 +21,7 @@ data "aws_caller_identity" "me" {}
 variable "cors_allowed_origins" {
   description = "Nguon duoc phep PUT anh len S3. Doi sang DNS cua ALB khi da co"
   type        = list(string)
-  default     = ["*"]
+  default     = ["http://imgflow-alb-1869531157.ap-southeast-2.elb.amazonaws.com"]
 }
 
 # Tên bucket có account id để không đụng tên với tài khoản khác (S3 dùng chung 1 không gian tên toàn cầu)
