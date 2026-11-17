@@ -10,4 +10,8 @@ output "nat_enabled"       { value = var.enable_nat }
 
 # Phong:  originals_bucket, processed_bucket, queue_url, cloudfront_domain, rds_endpoint
 # Thanh:  alb_dns_name
+output "alb_dns_name" {
+  description = "DNS cua ALB de truy cap web"
+  value       = aws_lb.web.dns_name
+}
 # Tùng:   worker_asg_name
