@@ -1,0 +1,34 @@
+:root {
+  --bg: #f5f6f8; --card: #fff; --text: #1d2330; --muted: #6b7280; --line: #e3e6eb;
+  --accent: #2459d6; --ok: #1a7f45; --warn: #b26b00; --err: #c0262d;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+.topbar { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: var(--card); border-bottom: 1px solid var(--line); }
+.brand { font-weight: 700; color: var(--accent); text-decoration: none; font-size: 18px; margin-right: auto; }
+.shop { color: var(--muted); }
+main { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; }
+.card.narrow { max-width: 420px; margin: 48px auto; }
+h1 { font-size: 20px; margin: 0 0 16px; }
+label { display: block; margin-bottom: 12px; font-weight: 500; }
+input { display: block; width: 100%; margin-top: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+button { padding: 8px 18px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+button:disabled { opacity: .6; cursor: default; }
+button.link { background: none; color: var(--accent); padding: 0; }
+.muted { color: var(--muted); }
+.error { color: var(--err); }
+.row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.summary span { margin-left: 12px; font-size: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+.item { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fafbfc; }
+.thumb { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: #eef0f3; color: var(--muted); font-size: 13px; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.meta { padding: 8px 10px; font-size: 13px; }
+.meta .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta .links a { margin-right: 6px; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.PENDING { background: #eef0f3; color: var(--muted); }
+.PROCESSING { background: #fff3dc; color: var(--warn); }
+.DONE { background: #e1f4e8; color: var(--ok); }
+.FAILED { background: #fde4e4; color: var(--err); }

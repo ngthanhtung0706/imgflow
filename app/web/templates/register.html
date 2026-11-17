@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Tạo shop · ImgFlow{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Tạo shop</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post">
+    <label>Tên đăng nhập <input name="username" required pattern="[A-Za-z0-9_\-]+" autofocus></label>
+    <label>Tên shop (in lên watermark) <input name="display_name" maxlength="60"></label>
+    <label>Mật khẩu <input name="password" type="password" minlength="6" required></label>
+    <button>Tạo shop</button>
+  </form>
+  <p class="muted">Đã có shop? <a href="{{ url_for('login') }}">Đăng nhập</a></p>
+</section>
+{% endblock %}
