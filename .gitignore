@@ -1,0 +1,16 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+
+# Khoa, mat khau, moi truong
+.env
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.pyc
+.venv/
