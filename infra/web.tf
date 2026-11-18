@@ -89,42 +89,39 @@ resource "aws_launch_template" "web" {
     security_groups             = [aws_security_group.web.id]
   }
 
-  # Tự động cài Python và chạy app mẫu cổng 8000 (trả về /healthz = 200)
-  # Sau này Tùng hoàn thiện app/web thì thay đoạn chạy server này bằng lệnh pull code & uvicorn/gunicorn
+  # Cài Python, clone repo public, chạy gunicorn cổng 8000 (/healthz không đụng DB)
+  # Cần enable_nat = true để cài gói và clone; enable_rds = true để web dùng được DB.
   user_data = base64encode(<<-EOF
     #!/bin/bash
-    set -e
-    dnf update -y
-    dnf install -y python3 python3-pip git
+    set -ex
+    dnf install -y python3.12 python3.12-pip git
 
-    mkdir -p /opt/imgflow
-    cat << 'PYEOF' > /opt/imgflow/bootstrap_app.py
-    from http.server import BaseHTTPRequestHandler, HTTPServer
+    # Cấu hình (không có mật khẩu: mật khẩu DB lấy từ Secrets Manager lúc chạy)
+    mkdir -p /etc/imgflow
+    cat > /etc/imgflow/imgflow.env <<ENVEOF
+    AWS_REGION=${var.region}
+    ORIGINALS_BUCKET=${aws_s3_bucket.originals.id}
+    PROCESSED_BUCKET=${aws_s3_bucket.processed.id}
+    CDN_DOMAIN=${var.cdn_domain}
+    DB_HOST=${local.db_host}
+    DB_SECRET_ARN=${local.db_secret_arn}
+    ENVEOF
 
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            if self.path == "/healthz":
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b"ok")
-            else:
-                self.send_response(200)
-                self.send_header("Content-type", "text/html; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(b"<h1>ImgFlow Web Server (ALB + ASG OK)</h1>")
+    git clone --depth 1 --branch ${var.app_git_ref} ${var.app_git_url} /opt/imgflow
+    python3.12 -m venv /opt/imgflow/venv
+    /opt/imgflow/venv/bin/pip install -r /opt/imgflow/app/web/requirements.txt
 
-    HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
-    PYEOF
-
-    cat << 'SVCEOF' > /etc/systemd/system/imgflow-web.service
+    cat > /etc/systemd/system/imgflow-web.service <<SVCEOF
     [Unit]
     Description=ImgFlow Web Service
-    After=network.target
+    After=network-online.target
 
     [Service]
-    ExecStart=/usr/bin/python3 /opt/imgflow/bootstrap_app.py
+    WorkingDirectory=/opt/imgflow/app
+    EnvironmentFile=/etc/imgflow/imgflow.env
+    ExecStart=/opt/imgflow/venv/bin/gunicorn -c web/gunicorn.conf.py web.app:app
     Restart=always
-    User=root
+    RestartSec=5
 
     [Install]
     WantedBy=multi-user.target
