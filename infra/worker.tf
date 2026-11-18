@@ -16,12 +16,6 @@ variable "app_git_ref" {
   default     = "develop"
 }
 
-variable "cdn_domain" {
-  description = "Ten mien CloudFront (Phong). De trong thi app dung presigned GET"
-  type        = string
-  default     = ""
-}
-
 locals {
   # RDS có thể đang tắt (enable_rds = false) nên không được tham chiếu cứng [0]
   db_host       = var.enable_rds ? aws_db_instance.main[0].address : ""
@@ -66,7 +60,7 @@ resource "aws_launch_template" "worker" {
     ORIGINALS_BUCKET=${aws_s3_bucket.originals.id}
     PROCESSED_BUCKET=${aws_s3_bucket.processed.id}
     QUEUE_URL=${aws_sqs_queue.main.url}
-    CDN_DOMAIN=${var.cdn_domain}
+    CDN_DOMAIN=${aws_cloudfront_distribution.cdn.domain_name}
     DB_HOST=${local.db_host}
     DB_SECRET_ARN=${local.db_secret_arn}
     EFS_ROOT=/mnt/efs

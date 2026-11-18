@@ -102,7 +102,7 @@ resource "aws_launch_template" "web" {
     AWS_REGION=${var.region}
     ORIGINALS_BUCKET=${aws_s3_bucket.originals.id}
     PROCESSED_BUCKET=${aws_s3_bucket.processed.id}
-    CDN_DOMAIN=${var.cdn_domain}
+    CDN_DOMAIN=${aws_cloudfront_distribution.cdn.domain_name}
     DB_HOST=${local.db_host}
     DB_SECRET_ARN=${local.db_secret_arn}
     ENVEOF
