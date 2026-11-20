@@ -162,6 +162,9 @@ resource "aws_autoscaling_group" "web" {
     value               = "imgflow-web"
     propagate_at_launch = true
   }
+
+  enabled_metrics     = ["GroupDesiredCapacity", "GroupInServiceInstances"]
+  metrics_granularity = "1Minute"
 }
 
 resource "aws_autoscaling_policy" "web_cpu" {
