@@ -25,6 +25,7 @@ imgflow/
 │   ├── monitoring.tf      # Quyền  – dashboard, alarm, SNS email
 │   └── outputs.tf         # Mỗi người thêm output của phần mình
 ├── app/
+│   ├── common/            # Tùng   – cấu hình, DB, quy ước tên key S3 (web + worker dùng chung)
 │   ├── web/               # Tùng   – web/API (đăng nhập, presign, trạng thái, gallery)
 │   └── worker/            # Tùng   – worker Pillow
 ├── scripts/

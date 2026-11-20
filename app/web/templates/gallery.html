@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Gallery · ImgFlow{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Tải ảnh lên</h1>
+  <form id="upload-form">
+    <label>Sản phẩm (tuỳ chọn) <input name="product" maxlength="100" placeholder="Ví dụ: Áo thun trắng"></label>
+    <label>Ảnh (JPEG, PNG, WebP; chọn được nhiều ảnh)
+      <input name="files" type="file" accept="image/jpeg,image/png,image/webp" multiple required>
+    </label>
+    <button id="upload-btn">Tải lên</button>
+  </form>
+  <p id="upload-status" class="muted"></p>
+</section>
+
+<section class="card">
+  <div class="row">
+    <h1>Ảnh của shop</h1>
+    <div id="summary" class="summary"></div>
+  </div>
+  <div id="grid" class="grid"></div>
+  <p id="empty" class="muted">Chưa có ảnh nào.</p>
+</section>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}
