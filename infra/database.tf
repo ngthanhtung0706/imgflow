@@ -19,7 +19,7 @@
 variable "db_multi_az" {
   description = "Dev: false (re hon). Bat true gan ngay demo de chung minh failover"
   type        = bool
-  default     = false
+  default     = true
 }
 
 # Subnet group miễn phí nên luôn tạo
