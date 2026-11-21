@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS shops (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Logo watermark riêng của shop (PNG, tối đa 512 KB). NULL = dùng logo mặc định trên EFS.
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS logo BYTEA;
+
 CREATE TABLE IF NOT EXISTS products (
     id         SERIAL PRIMARY KEY,
     shop_id    INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,

@@ -32,3 +32,6 @@ button.link { background: none; color: var(--accent); padding: 0; }
 .PROCESSING { background: #fff3dc; color: var(--warn); }
 .DONE { background: #e1f4e8; color: var(--ok); }
 .FAILED { background: #fde4e4; color: var(--err); }
+.logo-box { display: flex; align-items: center; min-height: 80px; margin-bottom: 12px; padding: 8px; border: 1px dashed var(--line); border-radius: 8px; background: repeating-conic-gradient(#eef0f3 0% 25%, #fff 0% 50%) 50% / 16px 16px; }
+.logo-box img { max-height: 72px; max-width: 100%; }
+#logo-form button { margin-right: 12px; }

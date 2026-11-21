@@ -71,6 +71,9 @@ resource "aws_launch_template" "worker" {
     python3.12 -m venv /opt/imgflow/venv
     /opt/imgflow/venv/bin/pip install -r /opt/imgflow/app/worker/requirements.txt
 
+    # Logo mặc định lên EFS (chỉ khi EFS đã mount và chưa có logo). Shop có logo riêng thì dùng logo trong RDS
+    mountpoint -q /mnt/efs && [ ! -f /mnt/efs/logo.png ] && cp /opt/imgflow/app/assets/logo.png /mnt/efs/logo.png || true
+
     cat > /etc/systemd/system/imgflow-worker.service <<SVCEOF
     [Unit]
     Description=ImgFlow Worker
