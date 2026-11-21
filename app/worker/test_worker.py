@@ -120,13 +120,29 @@ def test_xu_ly_lai_message_trung_khong_lam_lai(env):
     assert _status(job_id)["attempts"] == 1
 
 
-def test_file_hong_thanh_FAILED_va_xoa_message(env):
-    worker, s3, _, shop_id = env
+def _receipt(sqs):
+    sqs.send_message(QueueUrl=config.QUEUE_URL, MessageBody="x")
+    return sqs.receive_message(QueueUrl=config.QUEUE_URL)["Messages"][0]["ReceiptHandle"]
+
+
+def test_file_hong_thanh_FAILED_va_giu_message_de_vao_dlq(env):
+    worker, s3, sqs, shop_id = env
     job_id, key = _new_job(shop_id)
     s3.put_object(Bucket=config.ORIGINALS_BUCKET, Key=key, Body=b"khong phai anh")
-    assert worker.handle_message(_message(key)) is True
+    receipt = _receipt(sqs)
+
+    # Lần nhận 1: job FAILED, message KHÔNG bị xoá (return False) để SQS còn giao lại
+    assert worker.handle_message(_message(key, receives=1) | {"ReceiptHandle": receipt}) is False
     st = _status(job_id)
     assert st["status"] == "FAILED" and "anh" in st["error"]
+    # thông báo cho người dùng không lộ chi tiết kỹ thuật của Pillow
+    assert "BytesIO" not in st["error"] and "0x" not in st["error"]
+
+    # Lần nhận 2, 3: không xử lý lại (attempts giữ nguyên, không nháy PROCESSING), vẫn giữ message
+    for n in (2, 3):
+        assert worker.handle_message(_message(key, receives=n) | {"ReceiptHandle": receipt}) is False
+        st = _status(job_id)
+        assert st["status"] == "FAILED" and st["attempts"] == 1
 
 
 def test_loi_tam_thoi_giu_message_den_lan_thu_3(env):

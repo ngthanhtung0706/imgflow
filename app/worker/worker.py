@@ -34,6 +34,10 @@ class PermanentError(Exception):
     """Lỗi thử lại cũng không hết (ảnh hỏng, key sai tên...)."""
 
 
+class AlreadyFailed(Exception):
+    """Job đã FAILED ở lần nhận trước: không xử lý lại, chỉ để message đi tiếp sang DLQ."""
+
+
 # ---------------------------------------------------------------- ảnh
 def _load_font(size):
     path = config.EFS_ROOT / "font.ttf"
@@ -102,7 +106,8 @@ def make_variants(data, shop_id=None):
         src = Image.open(io.BytesIO(data))
         src.load()
     except Exception as exc:  # Pillow ném nhiều loại lỗi khác nhau cho file hỏng
-        raise PermanentError(f"khong doc duoc anh: {exc}") from exc
+        log.warning("Pillow khong doc duoc anh: %s", exc)  # chi tiet ky thuat chi ghi vao log
+        raise PermanentError("khong doc duoc anh (file hong hoac khong phai anh)") from exc
 
     src = ImageOps.exif_transpose(src)
     if src.mode in ("RGBA", "LA", "P"):
@@ -128,12 +133,16 @@ def make_variants(data, shop_id=None):
 
 # ---------------------------------------------------------------- job
 def claim_job(job_id):
-    """Đánh dấu PROCESSING và tăng attempts. Trả về None nếu job không cần làm nữa."""
+    """Đánh dấu PROCESSING và tăng attempts. Trả về None nếu job đã DONE.
+
+    Job FAILED là trạng thái cuối: raise AlreadyFailed để không xử lý lại (và không nháy
+    PROCESSING trên gallery) trong khi message đi nốt các lần nhận còn lại rồi sang DLQ.
+    """
     with db.connect() as conn:
         row = conn.execute(
             "UPDATE jobs SET status = 'PROCESSING', attempts = attempts + 1, worker = %s, "
             "started_at = now(), error = NULL "
-            "WHERE id = %s AND status IN ('PENDING', 'PROCESSING', 'FAILED') RETURNING attempts",
+            "WHERE id = %s AND status IN ('PENDING', 'PROCESSING') RETURNING attempts",
             (WORKER_NAME, job_id),
         ).fetchone()
         if row:
@@ -141,6 +150,8 @@ def claim_job(job_id):
         exists = conn.execute("SELECT status FROM jobs WHERE id = %s", (job_id,)).fetchone()
     if exists is None:
         raise RuntimeError(f"chua thay job {job_id} trong DB")  # có thể do trễ, cho thử lại
+    if exists["status"] == "FAILED":
+        raise AlreadyFailed(job_id)
     return None  # đã DONE
 
 
@@ -195,26 +206,51 @@ def _records(body):
     return out
 
 
+def _retry_later(msg):
+    """Cho message hiện lại sau RETRY_VISIBILITY giây. Nhận đủ maxReceiveCount lần thì SQS tự chuyển sang DLQ."""
+    _sqs.change_message_visibility(
+        QueueUrl=config.QUEUE_URL,
+        ReceiptHandle=msg["ReceiptHandle"],
+        VisibilityTimeout=config.RETRY_VISIBILITY,
+    )
+
+
+def _job_ids(msg):
+    try:
+        ids = []
+        for _, key in _records(msg["Body"]):
+            parsed = naming.parse_original_key(key)
+            if parsed:
+                ids.append(parsed[1])
+        return ids
+    except Exception:
+        return []
+
+
 def handle_message(msg):
-    """Xử lý một message SQS. Trả về True nếu được phép xoá message."""
+    """Xử lý một message SQS. Trả về True nếu được phép xoá message.
+
+    Ảnh hỏng (lỗi vĩnh viễn): job FAILED nhưng KHÔNG xoá message, để SQS giao lại đủ 3 lần rồi
+    chuyển sang DLQ, alarm DLQ mới gửi được email. Chỉ message không gắn với job nào
+    (key lạ, không phải JSON) mới bị xoá vì thử lại hay vào DLQ cũng không giúp gì.
+    """
     receives = int(msg.get("Attributes", {}).get("ApproximateReceiveCount", 1))
     try:
         for bucket, key in _records(msg["Body"]):
             process_object(bucket, key)
         return True
+    except AlreadyFailed:
+        log.info("job da FAILED tu lan nhan truoc (lan %d), giu message de sang DLQ", receives)
+        _retry_later(msg)
+        return False
     except Exception as exc:
         permanent = isinstance(exc, PermanentError)
         log.warning("loi (lan nhan %d, %s): %s", receives, "vinh vien" if permanent else "tam thoi", exc)
+        if permanent and not _job_ids(msg):
+            return True
         if permanent or receives >= config.MAX_RECEIVES:
             _mark_failed(msg, str(exc))
-        if permanent:
-            return True  # thử lại vô ích; không xoá thì cũng chỉ chạy lại 3 lần rồi vào DLQ
-        # Lỗi tạm: cho message hiện lại sớm. Quá MAX_RECEIVES thì SQS tự chuyển sang DLQ.
-        _sqs.change_message_visibility(
-            QueueUrl=config.QUEUE_URL,
-            ReceiptHandle=msg["ReceiptHandle"],
-            VisibilityTimeout=config.RETRY_VISIBILITY,
-        )
+        _retry_later(msg)
         return False
 
 
