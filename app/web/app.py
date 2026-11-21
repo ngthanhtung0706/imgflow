@@ -12,7 +12,7 @@ from functools import wraps
 
 import boto3
 from botocore.config import Config
-from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, session, url_for
 from flask.sessions import SecureCookieSessionInterface
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -249,6 +249,52 @@ def create_uploads():
 
     log.info("shop=%s tao %d job", shop_id, len(uploads))
     return jsonify(uploads=uploads), 201
+
+
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+MAX_LOGO_BYTES = 512 * 1024
+
+
+@app.get("/api/logo")
+@login_required
+def get_logo():
+    """Trả logo PNG của shop đang đăng nhập, 404 nếu shop chưa có (worker sẽ dùng logo mặc định)."""
+    with db.connect() as conn:
+        row = conn.execute("SELECT logo FROM shops WHERE id = %s", (session["shop_id"],)).fetchone()
+    if not row or not row["logo"]:
+        abort(404)
+    return Response(
+        bytes(row["logo"]),
+        mimetype="image/png",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@app.post("/api/logo")
+@login_required
+def upload_logo():
+    """Shop upload logo watermark riêng (form-data, trường 'logo', PNG tối đa 512 KB)."""
+    f = request.files.get("logo")
+    if f is None:
+        return jsonify(error="chua chon file logo"), 400
+    data = f.read(MAX_LOGO_BYTES + 1)
+    if len(data) > MAX_LOGO_BYTES:
+        return jsonify(error="logo toi da 512 KB"), 400
+    if not data.startswith(PNG_SIGNATURE):
+        return jsonify(error="logo phai la file PNG"), 400
+    with db.connect() as conn:
+        conn.execute("UPDATE shops SET logo = %s WHERE id = %s", (data, session["shop_id"]))
+    log.info("shop=%s cap nhat logo (%d byte)", session["shop_id"], len(data))
+    return jsonify(ok=True), 200
+
+
+@app.delete("/api/logo")
+@login_required
+def delete_logo():
+    """Xoá logo riêng, quay về logo mặc định."""
+    with db.connect() as conn:
+        conn.execute("UPDATE shops SET logo = NULL WHERE id = %s", (session["shop_id"],))
+    return jsonify(ok=True)
 
 
 _JOB_SELECT = """

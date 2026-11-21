@@ -14,6 +14,22 @@
 </section>
 
 <section class="card">
+  <h1>Logo watermark của shop</h1>
+  <p class="muted">Logo này được đóng lên mọi ảnh của shop bạn. Chưa có logo thì dùng logo mặc định của ImgFlow.
+    Chỉ nhận PNG (nên có nền trong suốt), tối đa 512 KB. Chỉ áp dụng cho ảnh upload sau khi đổi logo.</p>
+  <div class="logo-box">
+    <img id="logo-preview" alt="Logo hiện tại" hidden>
+    <span id="logo-none" class="muted">Chưa có logo riêng.</span>
+  </div>
+  <form id="logo-form">
+    <label>Chọn logo (PNG) <input name="logo" type="file" accept="image/png" required></label>
+    <button id="logo-btn">Lưu logo</button>
+    <button id="logo-del" type="button" class="link" hidden>Xoá logo riêng</button>
+  </form>
+  <p id="logo-status" class="muted"></p>
+</section>
+
+<section class="card">
   <div class="row">
     <h1>Ảnh của shop</h1>
     <div id="summary" class="summary"></div>
@@ -23,4 +39,5 @@
 </section>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="{{ url_for('static', filename='logo.js') }}"></script>
 {% endblock %}

@@ -43,15 +43,38 @@ def _load_font(size):
         return ImageFont.load_default(size)  # chạy laptop / EFS chưa mount
 
 
-def _load_logo():
+MAX_LOGO_PIXELS = 4_000_000  # logo to hơn mức này bị bỏ qua cho đỡ tốn RAM
+
+
+def _open_logo(source):
+    """Mở logo từ đường dẫn hoặc file-like. Trả về None nếu không dùng được."""
     try:
-        return Image.open(config.EFS_ROOT / "logo.png").convert("RGBA")
-    except OSError:
+        logo = Image.open(source)
+        if logo.width * logo.height > MAX_LOGO_PIXELS:
+            return None
+        return logo.convert("RGBA")
+    except Exception:  # Pillow ném nhiều loại lỗi cho file hỏng
         return None
 
 
+def _load_logo(shop_id=None):
+    """Logo riêng của shop (RDS) -> logo mặc định trên EFS -> None (đóng dấu bằng chữ)."""
+    if shop_id is not None:
+        try:
+            with db.connect() as conn:
+                row = conn.execute("SELECT logo FROM shops WHERE id = %s", (shop_id,)).fetchone()
+            if row and row["logo"]:
+                logo = _open_logo(io.BytesIO(bytes(row["logo"])))
+                if logo is not None:
+                    return logo
+                log.warning("logo cua shop %s hong, dung logo mac dinh", shop_id)
+        except Exception:
+            log.exception("khong doc duoc logo shop %s, dung logo mac dinh", shop_id)
+    return _open_logo(config.EFS_ROOT / "logo.png")
+
+
 def add_watermark(img, logo=None):
-    """Đóng dấu ở góc phải dưới: logo từ EFS nếu có, không thì chữ."""
+    """Đóng dấu ở góc phải dưới: logo nếu có, không thì chữ."""
     img = img.convert("RGBA")
     w, h = img.size
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -73,8 +96,8 @@ def add_watermark(img, logo=None):
     return Image.alpha_composite(img, layer).convert("RGB")
 
 
-def make_variants(data):
-    """bytes ảnh gốc -> {tên bản: bytes JPEG}."""
+def make_variants(data, shop_id=None):
+    """bytes ảnh gốc -> {tên bản: bytes JPEG}. Có shop_id thì dùng logo riêng của shop nếu có."""
     try:
         src = Image.open(io.BytesIO(data))
         src.load()
@@ -90,7 +113,7 @@ def make_variants(data):
     else:
         src = src.convert("RGB")
 
-    logo = _load_logo()
+    logo = _load_logo(shop_id)
     out = {}
     for name, max_side, quality in naming.VARIANTS:
         img = src.copy()
@@ -141,7 +164,7 @@ def process_object(bucket, key):
         return False
 
     data = _s3.get_object(Bucket=bucket, Key=key)["Body"].read()
-    variants = make_variants(data)
+    variants = make_variants(data, shop_id)
     for name, body in variants.items():
         _s3.put_object(
             Bucket=config.PROCESSED_BUCKET,
