@@ -41,18 +41,19 @@
 
     <details class="panel collapsible">
       <summary><h2>Logo watermark</h2><span class="muted">Tuỳ chỉnh</span></summary>
-      <p class="muted small">Logo được đóng lên mọi ảnh tải lên sau khi lưu. Chưa có logo riêng thì dùng logo mặc định.
-        PNG nền trong suốt, tối đa 512 KB.</p>
-      <div class="logo-box">
-        <img id="logo-preview" alt="Logo hiện tại" hidden>
-        <span id="logo-none" class="muted small">Đang dùng logo mặc định</span>
-      </div>
-      <form id="logo-form">
-        <label class="file-label">Chọn file PNG <input name="logo" type="file" accept="image/png" required></label>
-        <div class="row-actions">
-          <button id="logo-btn" class="btn btn-primary">Lưu logo</button>
-          <button id="logo-del" type="button" class="btn btn-secondary" hidden>Dùng logo mặc định</button>
+      <div class="logo-row">
+        <div class="logo-box">
+          <img id="logo-preview" alt="Logo hiện tại" hidden>
+          <span id="logo-none">Mặc định</span>
         </div>
+        <div class="logo-text">
+          <div class="logo-name" id="logo-name">Logo mặc định</div>
+          <div class="muted small">PNG nền trong suốt, tối đa 512 KB</div>
+        </div>
+      </div>
+      <form id="logo-form" class="logo-actions">
+        <label class="btn btn-secondary file-btn" id="logo-pick"><input name="logo" type="file" accept="image/png" aria-label="Chọn file logo PNG">Chọn logo</label>
+        <button id="logo-del" type="button" class="link-btn small" hidden>Dùng logo mặc định</button>
       </form>
       <p id="logo-status" class="status-line muted" role="status"></p>
     </details>

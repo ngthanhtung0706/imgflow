@@ -282,12 +282,12 @@ def upload_logo():
     """Shop upload logo watermark riêng (form-data, trường 'logo', PNG tối đa 512 KB)."""
     f = request.files.get("logo")
     if f is None:
-        return jsonify(error="chua chon file logo"), 400
+        return jsonify(error="Chưa chọn file logo."), 400
     data = f.read(MAX_LOGO_BYTES + 1)
     if len(data) > MAX_LOGO_BYTES:
-        return jsonify(error="logo toi da 512 KB"), 400
+        return jsonify(error="Logo tối đa 512 KB."), 400
     if not data.startswith(PNG_SIGNATURE):
-        return jsonify(error="logo phai la file PNG"), 400
+        return jsonify(error="Logo phải là file PNG."), 400
     with db.connect() as conn:
         conn.execute("UPDATE shops SET logo = %s WHERE id = %s", (data, session["shop_id"]))
     log.info("shop=%s cap nhat logo (%d byte)", session["shop_id"], len(data))
