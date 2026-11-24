@@ -166,8 +166,11 @@
     const meta = el("div", "meta");
     const name = el("div", "name", job.name);
     name.title = job.name;
-    meta.append(name, el("span", "badge " + job.status, STATUS_TEXT[job.status] || job.status));
-    if (job.status === "DONE" && job.duration_s != null) meta.append(el("span", "sub", fmtSec(job.duration_s)));
+    // trạng thái và thời gian xử lý nằm chung một hàng, canh giữa theo chiều dọc
+    const status = el("div", "status-row");
+    status.append(el("span", "badge " + job.status, STATUS_TEXT[job.status] || job.status));
+    if (job.status === "DONE" && job.duration_s != null) status.append(el("span", "sub", fmtSec(job.duration_s)));
+    meta.append(name, status);
     if (job.status === "FAILED") meta.append(el("div", "error", job.error || "Lỗi không rõ."));
     item.append(thumb, meta);
     item.addEventListener("click", () => openModal(job.job_id));

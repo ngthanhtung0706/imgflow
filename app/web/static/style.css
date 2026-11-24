@@ -146,13 +146,14 @@ label:focus-within .hint { display: block; }
 .item:hover .thumb img { transform: scale(1.03); }
 .item:focus-visible { outline: none; }
 .item:focus-visible .thumb { outline: 2px solid var(--focus); outline-offset: 2px; }
-.meta { padding-top: 9px; font-size: 13px; }
-.meta .name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-weight: 500; line-height: 1.4; margin-bottom: 4px; }
-.meta .sub { display: inline; color: var(--muted); font-size: 12.5px; margin-left: 8px; }
-.meta .error { margin-top: 4px; font-size: 12.5px; line-height: 1.45; }
+.meta { padding-top: 10px; }
+.meta .name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 13px; font-weight: 500; line-height: 18px; height: 36px; margin-bottom: 6px; }
+.status-row { display: flex; align-items: center; gap: 10px; height: 18px; }
+.meta .sub { color: var(--muted); font-size: 12.5px; line-height: 18px; font-variant-numeric: tabular-nums; }
+.meta .error { margin-top: 6px; font-size: 12.5px; line-height: 18px; }
 
 /* nhãn trạng thái: chấm màu + chữ, không tô nền */
-.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; line-height: 18px; color: var(--muted); }
 .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--pending); }
 .badge.DONE::before { background: var(--done); }
 .badge.PROCESSING::before { background: var(--active); }
