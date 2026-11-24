@@ -1,6 +1,6 @@
-/* ImgFlow – nền ngà, chữ đen; xanh cobalt chỉ dùng cho nút chính, tab đang chọn và thanh tiến độ */
+/* ImgFlow – nền trắng, chữ đen; xanh cobalt chỉ dùng cho nút chính, tab đang chọn và thanh tiến độ */
 :root {
-  --bg: #fafaf8; --surface: #ffffff; --text: #1a1a1a; --muted: #6b6b66; --line: #e6e5e0; --soft: #f1f0ec;
+  --bg: #ffffff; --surface: #ffffff; --text: #1a1a1a; --muted: #6b6b66; --line: #e6e5e0; --soft: #f1f0ec;
   --ink: #1d4ed8; --ink-hover: #1e40af; --ink-text: #ffffff; --ink-soft: #eef2fd; --link: #1a1a1a; --focus: #1d4ed8;
   --done: #16a34a; --active: #d97706; --failed: #dc2626; --pending: #a3a39e;
   --done-soft: #e8f5ec; --active-soft: #fdf3e3; --failed-soft: #fdecec;
