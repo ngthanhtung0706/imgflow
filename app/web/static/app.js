@@ -155,8 +155,13 @@
       img.alt = job.name;
       img.loading = "lazy";
       thumb.append(img);
+    } else if (job.status === "FAILED") {
+      thumb.classList.add("failed");
+      thumb.textContent = "Không xử lý được";
     } else {
-      thumb.textContent = job.status === "FAILED" ? "Không xử lý được" : job.status === "PROCESSING" ? "Đang xử lý..." : "Đang chờ xử lý...";
+      thumb.classList.add("skeleton", job.status);
+      thumb.setAttribute("role", "img");
+      thumb.setAttribute("aria-label", job.status === "PROCESSING" ? "Đang xử lý" : "Đang chờ xử lý");
     }
     const meta = el("div", "meta");
     const name = el("div", "name", job.name);
