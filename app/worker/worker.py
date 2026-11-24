@@ -107,7 +107,7 @@ def make_variants(data, shop_id=None):
         src.load()
     except Exception as exc:  # Pillow ném nhiều loại lỗi khác nhau cho file hỏng
         log.warning("Pillow khong doc duoc anh: %s", exc)  # chi tiet ky thuat chi ghi vao log
-        raise PermanentError("Không đọc được ảnh: file bị hỏng hoặc không phải ảnh.") from exc
+        raise PermanentError("File bị hỏng hoặc không phải ảnh.") from exc
 
     src = ImageOps.exif_transpose(src)
     if src.mode in ("RGBA", "LA", "P"):
