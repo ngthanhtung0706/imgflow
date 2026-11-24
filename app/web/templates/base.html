@@ -6,14 +6,15 @@
   <title>{% block title %}ImgFlow{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <header class="topbar">
-    <a class="brand" href="{{ url_for('index') }}">ImgFlow</a>
+    <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark">IF</span>ImgFlow</a>
     {% if session.get('shop_id') %}
-      <span class="shop">{{ session.get('shop_name') }}</span>
-      <form method="post" action="{{ url_for('logout') }}"><button class="link">Đăng xuất</button></form>
+      <span class="shop-chip" title="Shop đang đăng nhập">{{ session.get('shop_name') }}</span>
+      <form method="post" action="{{ url_for('logout') }}"><button class="btn btn-ghost">Đăng xuất</button></form>
     {% endif %}
   </header>
   <main>{% block content %}{% endblock %}</main>
+  <footer class="footer">ImgFlow · xử lý ảnh sản phẩm tự động trên AWS</footer>
 </body>
 </html>

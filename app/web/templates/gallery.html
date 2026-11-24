@@ -1,42 +1,111 @@
 {% extends "base.html" %}
 {% block title %}Gallery · ImgFlow{% endblock %}
 {% block content %}
-<section class="card">
-  <h1>Tải ảnh lên</h1>
-  <form id="upload-form">
-    <label>Sản phẩm (tuỳ chọn) <input name="product" maxlength="100" placeholder="Ví dụ: Áo thun trắng"></label>
-    <label>Ảnh (JPEG, PNG, WebP; chọn được nhiều ảnh)
-      <input name="files" type="file" accept="image/jpeg,image/png,image/webp" multiple required>
-    </label>
-    <button id="upload-btn">Tải lên</button>
-  </form>
-  <p id="upload-status" class="muted"></p>
+
+<section class="card" aria-labelledby="stats-title">
+  <div class="card-head">
+    <h2 id="stats-title">Theo dõi xử lý</h2>
+    <span class="live"><i></i> Tự cập nhật 3 giây/lần</span>
+  </div>
+  <div class="stat-grid">
+    <div class="stat"><span class="stat-num" id="st-total">0</span><span class="stat-label">Tổng số ảnh</span></div>
+    <div class="stat stat-ok"><span class="stat-num" id="st-done">0</span><span class="stat-label">Đã xong</span></div>
+    <div class="stat stat-warn"><span class="stat-num" id="st-active">0</span><span class="stat-label">Đang chờ / xử lý</span></div>
+    <div class="stat stat-err"><span class="stat-num" id="st-failed">0</span><span class="stat-label">Lỗi</span></div>
+  </div>
+  <div class="progress-row">
+    <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="st-progress">
+      <div id="st-bar"></div>
+    </div>
+    <span id="st-pct" class="muted">0%</span>
+  </div>
+  <div class="metrics">
+    <div><span class="metric-num" id="st-rate">–</span><span class="muted"> ảnh xong trong 1 phút qua</span></div>
+    <div><span class="metric-num" id="st-avg">–</span><span class="muted"> thời gian xử lý trung bình</span></div>
+    <div><span class="metric-num" id="st-workers">0</span><span class="muted"> worker hoạt động (5 phút qua)</span></div>
+  </div>
+  <div id="workers" class="workers" aria-label="Danh sách worker"></div>
 </section>
 
-<section class="card">
-  <h1>Logo watermark của shop</h1>
+<section class="card" aria-labelledby="upload-title">
+  <h2 id="upload-title">Tải ảnh lên</h2>
+  <form id="upload-form">
+    <label>Sản phẩm (tuỳ chọn)
+      <input name="product" maxlength="100" placeholder="Ví dụ: Áo thun trắng">
+    </label>
+    <label class="dropzone" id="dropzone">
+      <input name="files" id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple required>
+      <span class="dz-title">Kéo thả ảnh vào đây hoặc bấm để chọn</span>
+      <span class="dz-sub muted" id="dz-sub">JPEG, PNG, WebP · chọn được nhiều ảnh cùng lúc</span>
+    </label>
+    <div class="upload-actions">
+      <button id="upload-btn" class="btn btn-primary">Tải lên</button>
+      <div class="progress progress-sm" id="up-progress" hidden><div id="up-bar"></div></div>
+    </div>
+  </form>
+  <p id="upload-status" class="muted" role="status"></p>
+</section>
+
+<section class="card" aria-labelledby="logo-title">
+  <h2 id="logo-title">Logo watermark của shop</h2>
   <p class="muted">Logo này được đóng lên mọi ảnh của shop bạn. Chưa có logo thì dùng logo mặc định của ImgFlow.
     Chỉ nhận PNG (nên có nền trong suốt), tối đa 512 KB. Chỉ áp dụng cho ảnh upload sau khi đổi logo.</p>
   <div class="logo-box">
     <img id="logo-preview" alt="Logo hiện tại" hidden>
     <span id="logo-none" class="muted">Chưa có logo riêng.</span>
   </div>
-  <form id="logo-form">
+  <form id="logo-form" class="inline-form">
     <label>Chọn logo (PNG) <input name="logo" type="file" accept="image/png" required></label>
-    <button id="logo-btn">Lưu logo</button>
-    <button id="logo-del" type="button" class="link" hidden>Xoá logo riêng</button>
+    <div class="row-actions">
+      <button id="logo-btn" class="btn btn-primary">Lưu logo</button>
+      <button id="logo-del" type="button" class="btn btn-ghost" hidden>Xoá logo riêng</button>
+    </div>
   </form>
-  <p id="logo-status" class="muted"></p>
+  <p id="logo-status" class="muted" role="status"></p>
 </section>
 
-<section class="card">
-  <div class="row">
-    <h1>Ảnh của shop</h1>
-    <div id="summary" class="summary"></div>
+<section class="card" aria-labelledby="gallery-title">
+  <div class="card-head">
+    <h2 id="gallery-title">Ảnh của shop</h2>
+    <span class="muted" id="result-count"></span>
   </div>
-  <div id="grid" class="grid"></div>
-  <p id="empty" class="muted">Chưa có ảnh nào.</p>
+  <div class="toolbar">
+    <input id="q" type="search" placeholder="Tìm theo tên file hoặc sản phẩm..." aria-label="Tìm ảnh">
+    <label class="check"><input type="checkbox" id="group"> Nhóm theo sản phẩm</label>
+  </div>
+  <div class="chips" id="filters" role="tablist" aria-label="Lọc theo trạng thái">
+    <button class="chip active" data-status="ALL">Tất cả <b id="c-ALL">0</b></button>
+    <button class="chip" data-status="PENDING">Chờ <b id="c-PENDING">0</b></button>
+    <button class="chip" data-status="PROCESSING">Đang xử lý <b id="c-PROCESSING">0</b></button>
+    <button class="chip" data-status="DONE">Xong <b id="c-DONE">0</b></button>
+    <button class="chip" data-status="FAILED">Lỗi <b id="c-FAILED">0</b></button>
+  </div>
+  <div id="gallery"></div>
+  <p id="empty" class="muted empty">Chưa có ảnh nào. Hãy tải ảnh lên ở phía trên.</p>
 </section>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="m-title">
+    <button class="modal-close btn btn-ghost" data-close aria-label="Đóng">✕</button>
+    <h3 id="m-title"></h3>
+    <div class="m-body">
+      <div class="m-preview" id="m-preview"></div>
+      <div class="m-info">
+        <div class="variant-tabs" id="m-variants"></div>
+        <dl class="info" id="m-info"></dl>
+        <p class="error small" id="m-error" hidden></p>
+        <div class="row-actions">
+          <a class="btn btn-primary" id="m-open" target="_blank" rel="noopener" hidden>Mở ảnh ở kích thước này</a>
+        </div>
+      </div>
+    </div>
+    <div class="m-nav">
+      <button class="btn btn-ghost" id="m-prev">‹ Trước</button>
+      <button class="btn btn-ghost" id="m-next">Sau ›</button>
+    </div>
+  </div>
+</div>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script src="{{ url_for('static', filename='logo.js') }}"></script>

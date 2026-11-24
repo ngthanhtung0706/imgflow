@@ -1,15 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Tạo shop · ImgFlow{% endblock %}
 {% block content %}
-<section class="card narrow">
+<section class="card narrow auth">
   <h1>Tạo shop</h1>
-  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <p class="muted">Mỗi shop có kho ảnh và logo watermark riêng.</p>
+  {% if error %}<p class="alert alert-error" role="alert">{{ error }}</p>{% endif %}
   <form method="post">
-    <label>Tên đăng nhập <input name="username" required pattern="[A-Za-z0-9_\-]+" autofocus></label>
+    <label>Tên đăng nhập <input name="username" required pattern="[A-Za-z0-9_\-]+" autofocus autocomplete="username">
+      <span class="hint">Chữ không dấu, số, - và _</span></label>
     <label>Tên shop <input name="display_name" maxlength="60"></label>
-    <label>Mật khẩu <input name="password" type="password" minlength="6" required></label>
-    <button>Tạo shop</button>
+    <label>Mật khẩu <input name="password" type="password" minlength="6" required autocomplete="new-password">
+      <span class="hint">Tối thiểu 6 ký tự</span></label>
+    <button class="btn btn-primary btn-block">Tạo shop</button>
   </form>
-  <p class="muted">Đã có shop? <a href="{{ url_for('login') }}">Đăng nhập</a></p>
+  <p class="muted center">Đã có shop? <a href="{{ url_for('login') }}">Đăng nhập</a></p>
 </section>
 {% endblock %}

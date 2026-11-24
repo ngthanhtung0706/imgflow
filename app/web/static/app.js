@@ -1,14 +1,16 @@
-// Gallery: xin presigned URL, PUT ảnh thẳng lên S3, rồi cứ 3 giây hỏi lại trạng thái job.
+// Gallery: tải ảnh lên S3 bằng presigned URL, theo dõi xử lý, lọc/nhóm ảnh, xem chi tiết.
+// Mọi dữ liệu do người dùng hoặc worker tạo ra (tên file, tên sản phẩm, lỗi, tên worker)
+// đều gán bằng textContent, không chèn vào innerHTML.
 (function () {
-  const form = document.getElementById("upload-form");
-  const btn = document.getElementById("upload-btn");
-  const statusEl = document.getElementById("upload-status");
-  const grid = document.getElementById("grid");
-  const empty = document.getElementById("empty");
-  const summaryEl = document.getElementById("summary");
+  const $ = (id) => document.getElementById(id);
   const STATUS_TEXT = { PENDING: "Chờ", PROCESSING: "Đang xử lý", DONE: "Xong", FAILED: "Lỗi" };
+  const VARIANT_TEXT = { full: "Gốc nén", "1080": "1080 px", "600": "600 px", thumb: "Thumb 200 px" };
   const PARALLEL = 6;
+  const POLL_MS = 3000;
 
+  const state = { jobs: [], status: "ALL", q: "", group: false, signature: "", modalId: null, modalSig: "", variant: "1080" };
+
+  // ---------------------------------------------------------------- tiện ích
   async function api(path, options) {
     const res = await fetch(path, Object.assign({ headers: { "Content-Type": "application/json" } }, options));
     if (res.status === 401) { location.href = "/login"; throw new Error("chưa đăng nhập"); }
@@ -17,11 +19,57 @@
     return data;
   }
 
+  function el(tag, className, text) {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  const fmtBytes = (n) => {
+    if (n == null) return "–";
+    if (n < 1024) return n + " B";
+    if (n < 1048576) return (n / 1024).toFixed(0) + " KB";
+    return (n / 1048576).toFixed(1) + " MB";
+  };
+  const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString("vi-VN") : "–");
+  const fmtSec = (s) => (s == null ? "–" : s < 60 ? s.toFixed(1) + " giây" : Math.floor(s / 60) + " phút " + Math.round(s % 60) + " giây");
+
+  // ---------------------------------------------------------------- tải ảnh lên
+  const form = $("upload-form");
+  const btn = $("upload-btn");
+  const statusEl = $("upload-status");
+  const fileInput = $("files");
+  const dropzone = $("dropzone");
+  const dzSub = $("dz-sub");
+  const upProgress = $("up-progress");
+  const upBar = $("up-bar");
+  const DZ_DEFAULT = dzSub.textContent;
+
+  function describeSelection() {
+    const n = fileInput.files.length;
+    if (!n) { dzSub.textContent = DZ_DEFAULT; return; }
+    const total = Array.from(fileInput.files).reduce((s, f) => s + f.size, 0);
+    dzSub.textContent = `Đã chọn ${n} ảnh · ${fmtBytes(total)}`;
+  }
+  fileInput.addEventListener("change", describeSelection);
+  ["dragenter", "dragover"].forEach((ev) => dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((ev) => dropzone.addEventListener(ev, () => dropzone.classList.remove("over")));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files.length) {
+      fileInput.files = e.dataTransfer.files;
+      describeSelection();
+    }
+  });
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const files = Array.from(form.files.files);
+    const files = Array.from(fileInput.files);
     if (!files.length) return;
     btn.disabled = true;
+    upProgress.hidden = false;
+    upBar.style.width = "0";
     try {
       statusEl.textContent = `Đang xin quyền tải ${files.length} ảnh...`;
       const { uploads } = await api("/api/uploads", {
@@ -46,74 +94,244 @@
             console.error(u.name, err);
             failed++;
           }
+          upBar.style.width = Math.round(((done + failed) / uploads.length) * 100) + "%";
           statusEl.textContent = `Đã tải ${done}/${uploads.length}` + (failed ? `, lỗi ${failed}` : "");
         }
       }
       await Promise.all(Array.from({ length: PARALLEL }, runOne));
-      form.files.value = "";
+      fileInput.value = "";
+      describeSelection();
+      statusEl.textContent += failed ? "" : " · xong, đang xử lý ảnh...";
     } catch (err) {
       statusEl.textContent = "Lỗi: " + err.message;
     } finally {
       btn.disabled = false;
+      setTimeout(() => { upProgress.hidden = true; }, 1500);
     }
   });
 
-  function card(job) {
-    const el = document.createElement("div");
-    el.className = "item";
-    el.dataset.id = job.job_id;
-    el.dataset.status = job.status;
-    const thumb = job.urls
-      ? `<a href="${job.urls["1080"]}" target="_blank"><img src="${job.urls.thumb}" alt="" loading="lazy"></a>`
-      : `<span>${job.status === "FAILED" ? "Không xử lý được" : "Đang chờ xử lý..."}</span>`;
-    const links = job.urls
-      ? Object.keys(job.urls).map((v) => `<a href="${job.urls[v]}" target="_blank">${v}</a>`).join("")
-      : "";
-    el.innerHTML = `
-      <div class="thumb">${thumb}</div>
-      <div class="meta">
-        <div class="name" title=""></div>
-        <span class="badge ${job.status}">${STATUS_TEXT[job.status] || job.status}</span>
-        <div class="links">${links}</div>
-        ${job.status === "FAILED" ? `<div class="error small"></div>` : ""}
-      </div>`;
-    // Tên file và lỗi do người dùng/worker tạo ra -> gán bằng textContent để tránh chèn HTML
-    const name = el.querySelector(".name");
-    name.textContent = (job.product ? job.product + " · " : "") + job.name;
-    name.title = name.textContent;
-    const errEl = el.querySelector(".error");
-    if (errEl) errEl.textContent = job.error || "";
-    return el;
+  // ---------------------------------------------------------------- bảng theo dõi
+  function renderStats(summary, stats) {
+    const total = Object.values(summary).reduce((a, b) => a + b, 0);
+    const active = (summary.PENDING || 0) + (summary.PROCESSING || 0);
+    $("st-total").textContent = total;
+    $("st-done").textContent = summary.DONE || 0;
+    $("st-active").textContent = active;
+    $("st-failed").textContent = summary.FAILED || 0;
+    const finished = (summary.DONE || 0) + (summary.FAILED || 0);
+    const pct = total ? Math.round((finished / total) * 100) : 0;
+    $("st-bar").style.width = pct + "%";
+    $("st-progress").setAttribute("aria-valuenow", pct);
+    $("st-pct").textContent = pct + "% đã xử lý xong";
+
+    ["ALL", "PENDING", "PROCESSING", "DONE", "FAILED"].forEach((s) => {
+      $("c-" + s).textContent = s === "ALL" ? total : summary[s] || 0;
+    });
+
+    if (!stats) return;
+    $("st-rate").textContent = stats.done_last_minute;
+    $("st-avg").textContent = fmtSec(stats.avg_seconds);
+    $("st-workers").textContent = stats.workers.length;
+    const box = $("workers");
+    box.replaceChildren(...stats.workers.map((w) => {
+      const chip = el("span", "worker" + (w.active ? " busy" : ""));
+      chip.append(el("span", "dot"), el("b", "", w.name), el("span", "muted", `${w.done} xong` + (w.active ? ` · ${w.active} đang làm` : "")));
+      return chip;
+    }));
   }
 
+  // ---------------------------------------------------------------- lưới ảnh
+  function matches(job) {
+    if (state.status !== "ALL" && job.status !== state.status) return false;
+    if (!state.q) return true;
+    const hay = ((job.product || "") + " " + job.name).toLowerCase();
+    return hay.includes(state.q);
+  }
+
+  function card(job) {
+    const item = el("button", "item");
+    item.type = "button";
+    item.dataset.id = job.job_id;
+    const thumb = el("div", "thumb");
+    if (job.urls) {
+      const img = document.createElement("img");
+      img.src = job.urls.thumb;
+      img.alt = job.name;
+      img.loading = "lazy";
+      thumb.append(img);
+    } else {
+      thumb.textContent = job.status === "FAILED" ? "Không xử lý được" : job.status === "PROCESSING" ? "Đang xử lý..." : "Đang chờ xử lý...";
+    }
+    const meta = el("div", "meta");
+    const name = el("div", "name", job.name);
+    name.title = job.name;
+    meta.append(name, el("span", "badge " + job.status, STATUS_TEXT[job.status] || job.status));
+    if (job.status === "DONE" && job.duration_s != null) meta.append(el("div", "sub", "Xử lý " + fmtSec(job.duration_s)));
+    if (job.status === "FAILED") meta.append(el("div", "error", job.error || "Lỗi không rõ"));
+    item.append(thumb, meta);
+    item.addEventListener("click", () => openModal(job.job_id));
+    return item;
+  }
+
+  function renderGallery() {
+    const list = state.jobs.filter(matches);
+    const signature = JSON.stringify([state.status, state.q, state.group, list.map((j) => [j.job_id, j.status, j.duration_s])]);
+    $("result-count").textContent = state.jobs.length ? `Hiển thị ${list.length}/${state.jobs.length} ảnh` : "";
+    $("empty").hidden = state.jobs.length > 0;
+    if (state.jobs.length && !list.length) {
+      $("empty").hidden = false;
+      $("empty").textContent = "Không có ảnh nào khớp bộ lọc.";
+    } else {
+      $("empty").textContent = "Chưa có ảnh nào. Hãy tải ảnh lên ở phía trên.";
+    }
+    if (signature === state.signature) return; // không đổi thì không vẽ lại, ảnh khỏi nhấp nháy
+    state.signature = signature;
+
+    const root = $("gallery");
+    if (!state.group) {
+      const grid = el("div", "grid");
+      grid.append(...list.map(card));
+      root.replaceChildren(grid);
+      return;
+    }
+    const groups = new Map();
+    list.forEach((j) => {
+      const key = j.product || "Không có sản phẩm";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(j);
+    });
+    const parts = [];
+    groups.forEach((jobs, key) => {
+      const title = el("div", "group-title", key);
+      title.append(el("span", "", jobs.length + " ảnh"));
+      const grid = el("div", "grid");
+      grid.append(...jobs.map(card));
+      parts.push(title, grid);
+    });
+    root.replaceChildren(...parts);
+  }
+
+  $("filters").addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    state.status = chip.dataset.status;
+    document.querySelectorAll("#filters .chip").forEach((c) => c.classList.toggle("active", c === chip));
+    renderGallery();
+  });
+  $("q").addEventListener("input", (e) => { state.q = e.target.value.trim().toLowerCase(); renderGallery(); });
+  $("group").addEventListener("change", (e) => { state.group = e.target.checked; renderGallery(); });
+
+  // ---------------------------------------------------------------- khung xem chi tiết
+  const modal = $("modal");
+
+  function currentList() { return state.jobs.filter(matches); }
+
+  function renderModal() {
+    const job = state.jobs.find((j) => j.job_id === state.modalId);
+    if (!job) { closeModal(); return; }
+    const list = currentList();
+    const idx = list.findIndex((j) => j.job_id === state.modalId);
+    $("m-prev").disabled = idx <= 0;
+    $("m-next").disabled = idx < 0 || idx >= list.length - 1;
+    // Không vẽ lại khung khi dữ liệu của ảnh này không đổi, để ảnh khỏi nhấp nháy mỗi 3 giây
+    const sig = JSON.stringify([job.job_id, state.variant, job.status, job.finished_at, job.error]);
+    if (sig === state.modalSig) return;
+    state.modalSig = sig;
+    $("m-title").textContent = (job.product ? job.product + " · " : "") + job.name;
+
+    const preview = $("m-preview");
+    const tabs = $("m-variants");
+    const open = $("m-open");
+    if (job.urls) {
+      if (!job.urls[state.variant]) state.variant = "1080";
+      const img = document.createElement("img");
+      img.src = job.urls[state.variant];
+      img.alt = job.name;
+      preview.replaceChildren(img);
+      tabs.replaceChildren(...Object.keys(job.urls).map((v) => {
+        const b = el("button", v === state.variant ? "active" : "", VARIANT_TEXT[v] || v);
+        b.type = "button";
+        b.addEventListener("click", () => { state.variant = v; state.modalSig = ""; renderModal(); });
+        return b;
+      }));
+      open.href = job.urls[state.variant];
+      open.hidden = false;
+    } else {
+      preview.textContent = job.status === "FAILED" ? "Ảnh này không xử lý được." : "Ảnh đang được xử lý, vui lòng chờ...";
+      tabs.replaceChildren();
+      open.hidden = true;
+    }
+
+    const rows = [
+      ["Trạng thái", el("span", "badge " + job.status, STATUS_TEXT[job.status] || job.status)],
+      ["Sản phẩm", job.product || "–"],
+      ["Dung lượng ảnh gốc", fmtBytes(job.size_bytes)],
+      ["Tải lên lúc", fmtTime(job.created_at)],
+      ["Bắt đầu xử lý", fmtTime(job.started_at)],
+      ["Xong lúc", fmtTime(job.finished_at)],
+      ["Thời gian xử lý", fmtSec(job.duration_s)],
+      ["Số lần thử", String(job.attempts)],
+      ["Worker xử lý", job.worker || "–"],
+    ];
+    const info = $("m-info");
+    info.replaceChildren();
+    rows.forEach(([k, v]) => {
+      const dd = el("dd");
+      if (typeof v === "string") dd.textContent = v; else dd.append(v);
+      info.append(el("dt", "", k), dd);
+    });
+    const err = $("m-error");
+    err.hidden = !(job.status === "FAILED");
+    err.textContent = job.error ? "Lý do lỗi: " + job.error : "";
+  }
+
+  function openModal(id) {
+    state.modalId = id;
+    state.modalSig = "";
+    modal.hidden = false;
+    document.body.classList.add("modal-open");
+    renderModal();
+  }
+  function closeModal() {
+    state.modalId = null;
+    state.modalSig = "";
+    modal.hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+  function step(delta) {
+    const list = currentList();
+    const idx = list.findIndex((j) => j.job_id === state.modalId);
+    const target = list[idx + delta];
+    if (target) { state.modalId = target.job_id; state.modalSig = ""; renderModal(); }
+  }
+  modal.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeModal(); });
+  $("m-prev").addEventListener("click", () => step(-1));
+  $("m-next").addEventListener("click", () => step(1));
+  document.addEventListener("keydown", (e) => {
+    if (modal.hidden) return;
+    if (e.key === "Escape") closeModal();
+    else if (e.key === "ArrowLeft") step(-1);
+    else if (e.key === "ArrowRight") step(1);
+  });
+
+  // ---------------------------------------------------------------- cập nhật định kỳ
+  let busy = false;
   async function refresh() {
+    if (busy) return;
+    busy = true;
     try {
-      const data = await api("/api/jobs");
-      summaryEl.innerHTML = Object.entries(data.summary)
-        .map(([s, n]) => `<span class="badge ${s}">${STATUS_TEXT[s]}: ${n}</span>`).join("");
-      empty.hidden = data.jobs.length > 0;
-      // Chỉ vẽ lại ô nào đổi trạng thái để ảnh không nhấp nháy
-      const existing = new Map(Array.from(grid.children).map((el) => [el.dataset.id, el]));
-      let prev = null;
-      for (const job of data.jobs) {
-        let el = existing.get(job.job_id);
-        if (!el || el.dataset.status !== job.status) {
-          const fresh = card(job);
-          if (el) el.replaceWith(fresh);
-          el = fresh;
-        }
-        existing.delete(job.job_id);
-        if (prev ? prev.nextSibling !== el : grid.firstChild !== el) {
-          prev ? prev.after(el) : grid.prepend(el);
-        }
-        prev = el;
-      }
-      existing.forEach((el) => el.remove());
+      const [data, stats] = await Promise.all([api("/api/jobs"), api("/api/stats").catch(() => null)]);
+      state.jobs = data.jobs;
+      renderStats(data.summary, stats);
+      renderGallery();
+      if (state.modalId) renderModal();
     } catch (err) {
       console.error(err);
+    } finally {
+      busy = false;
     }
   }
 
   refresh();
-  setInterval(refresh, 3000);
+  setInterval(refresh, POLL_MS);
 })();
