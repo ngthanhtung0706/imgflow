@@ -120,13 +120,29 @@ def test_xu_ly_lai_message_trung_khong_lam_lai(env):
     assert _status(job_id)["attempts"] == 1
 
 
-def test_file_hong_thanh_FAILED_va_xoa_message(env):
-    worker, s3, _, shop_id = env
+def _receipt(sqs):
+    sqs.send_message(QueueUrl=config.QUEUE_URL, MessageBody="x")
+    return sqs.receive_message(QueueUrl=config.QUEUE_URL)["Messages"][0]["ReceiptHandle"]
+
+
+def test_file_hong_thanh_FAILED_va_giu_message_de_vao_dlq(env):
+    worker, s3, sqs, shop_id = env
     job_id, key = _new_job(shop_id)
     s3.put_object(Bucket=config.ORIGINALS_BUCKET, Key=key, Body=b"khong phai anh")
-    assert worker.handle_message(_message(key)) is True
+    receipt = _receipt(sqs)
+
+    # Lần nhận 1: job FAILED, message KHÔNG bị xoá (return False) để SQS còn giao lại
+    assert worker.handle_message(_message(key, receives=1) | {"ReceiptHandle": receipt}) is False
     st = _status(job_id)
-    assert st["status"] == "FAILED" and "anh" in st["error"]
+    assert st["status"] == "FAILED" and st["error"] == "File bị hỏng hoặc không phải ảnh."
+    # thông báo cho người dùng không lộ chi tiết kỹ thuật của Pillow
+    assert "BytesIO" not in st["error"] and "0x" not in st["error"]
+
+    # Lần nhận 2, 3: không xử lý lại (attempts giữ nguyên, không nháy PROCESSING), vẫn giữ message
+    for n in (2, 3):
+        assert worker.handle_message(_message(key, receives=n) | {"ReceiptHandle": receipt}) is False
+        st = _status(job_id)
+        assert st["status"] == "FAILED" and st["attempts"] == 1
 
 
 def test_loi_tam_thoi_giu_message_den_lan_thu_3(env):
@@ -148,3 +164,27 @@ def test_bo_qua_s3_test_event_va_key_la(env):
     worker, *_ = env
     assert worker.handle_message({"Body": json.dumps({"Event": "s3:TestEvent"}), "ReceiptHandle": "r"}) is True
     assert worker.handle_message(_message("linh-tinh/abc.jpg")) is True
+
+
+# ---------------------------------------------------------------- logo watermark (không cần DB)
+def _logo_png(color=(0, 255, 0, 255), size=(300, 100)):
+    buf = io.BytesIO()
+    Image.new("RGBA", size, color).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def test_logo_rieng_duoc_dong_len_anh(monkeypatch):
+    from worker import worker
+    monkeypatch.setattr(worker, "_load_logo", lambda shop_id=None: Image.open(io.BytesIO(_logo_png())).convert("RGBA"))
+    out = worker.make_variants(_jpeg((1000, 800)), shop_id=1)
+    img = Image.open(io.BytesIO(out["full"]))
+    corner = img.crop((img.width - 260, img.height - 100, img.width, img.height))
+    # nền gốc là (200, 80, 40); logo xanh lá pha vào làm giảm đỏ, tăng xanh
+    assert any(g > 95 and r < 160 for r, g, b in corner.getdata())
+
+
+def test_logo_hong_hoac_qua_to_bi_bo_qua():
+    from worker import worker
+    assert worker._open_logo(io.BytesIO(b"khong phai png")) is None
+    assert worker._open_logo(io.BytesIO(_logo_png(size=(3000, 2000)))) is None  # 6 triệu điểm ảnh > giới hạn
+    assert worker._open_logo(io.BytesIO(_logo_png())) is not None

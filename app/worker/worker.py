@@ -34,6 +34,10 @@ class PermanentError(Exception):
     """Lỗi thử lại cũng không hết (ảnh hỏng, key sai tên...)."""
 
 
+class AlreadyFailed(Exception):
+    """Job đã FAILED ở lần nhận trước: không xử lý lại, chỉ để message đi tiếp sang DLQ."""
+
+
 # ---------------------------------------------------------------- ảnh
 def _load_font(size):
     path = config.EFS_ROOT / "font.ttf"
@@ -43,15 +47,38 @@ def _load_font(size):
         return ImageFont.load_default(size)  # chạy laptop / EFS chưa mount
 
 
-def _load_logo():
+MAX_LOGO_PIXELS = 4_000_000  # logo to hơn mức này bị bỏ qua cho đỡ tốn RAM
+
+
+def _open_logo(source):
+    """Mở logo từ đường dẫn hoặc file-like. Trả về None nếu không dùng được."""
     try:
-        return Image.open(config.EFS_ROOT / "logo.png").convert("RGBA")
-    except OSError:
+        logo = Image.open(source)
+        if logo.width * logo.height > MAX_LOGO_PIXELS:
+            return None
+        return logo.convert("RGBA")
+    except Exception:  # Pillow ném nhiều loại lỗi cho file hỏng
         return None
 
 
+def _load_logo(shop_id=None):
+    """Logo riêng của shop (RDS) -> logo mặc định trên EFS -> None (đóng dấu bằng chữ)."""
+    if shop_id is not None:
+        try:
+            with db.connect() as conn:
+                row = conn.execute("SELECT logo FROM shops WHERE id = %s", (shop_id,)).fetchone()
+            if row and row["logo"]:
+                logo = _open_logo(io.BytesIO(bytes(row["logo"])))
+                if logo is not None:
+                    return logo
+                log.warning("logo cua shop %s hong, dung logo mac dinh", shop_id)
+        except Exception:
+            log.exception("khong doc duoc logo shop %s, dung logo mac dinh", shop_id)
+    return _open_logo(config.EFS_ROOT / "logo.png")
+
+
 def add_watermark(img, logo=None):
-    """Đóng dấu ở góc phải dưới: logo từ EFS nếu có, không thì chữ."""
+    """Đóng dấu ở góc phải dưới: logo nếu có, không thì chữ."""
     img = img.convert("RGBA")
     w, h = img.size
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -73,13 +100,14 @@ def add_watermark(img, logo=None):
     return Image.alpha_composite(img, layer).convert("RGB")
 
 
-def make_variants(data):
-    """bytes ảnh gốc -> {tên bản: bytes JPEG}."""
+def make_variants(data, shop_id=None):
+    """bytes ảnh gốc -> {tên bản: bytes JPEG}. Có shop_id thì dùng logo riêng của shop nếu có."""
     try:
         src = Image.open(io.BytesIO(data))
         src.load()
     except Exception as exc:  # Pillow ném nhiều loại lỗi khác nhau cho file hỏng
-        raise PermanentError(f"khong doc duoc anh: {exc}") from exc
+        log.warning("Pillow khong doc duoc anh: %s", exc)  # chi tiet ky thuat chi ghi vao log
+        raise PermanentError("File bị hỏng hoặc không phải ảnh.") from exc
 
     src = ImageOps.exif_transpose(src)
     if src.mode in ("RGBA", "LA", "P"):
@@ -90,7 +118,7 @@ def make_variants(data):
     else:
         src = src.convert("RGB")
 
-    logo = _load_logo()
+    logo = _load_logo(shop_id)
     out = {}
     for name, max_side, quality in naming.VARIANTS:
         img = src.copy()
@@ -105,12 +133,16 @@ def make_variants(data):
 
 # ---------------------------------------------------------------- job
 def claim_job(job_id):
-    """Đánh dấu PROCESSING và tăng attempts. Trả về None nếu job không cần làm nữa."""
+    """Đánh dấu PROCESSING và tăng attempts. Trả về None nếu job đã DONE.
+
+    Job FAILED là trạng thái cuối: raise AlreadyFailed để không xử lý lại (và không nháy
+    PROCESSING trên gallery) trong khi message đi nốt các lần nhận còn lại rồi sang DLQ.
+    """
     with db.connect() as conn:
         row = conn.execute(
             "UPDATE jobs SET status = 'PROCESSING', attempts = attempts + 1, worker = %s, "
             "started_at = now(), error = NULL "
-            "WHERE id = %s AND status IN ('PENDING', 'PROCESSING', 'FAILED') RETURNING attempts",
+            "WHERE id = %s AND status IN ('PENDING', 'PROCESSING') RETURNING attempts",
             (WORKER_NAME, job_id),
         ).fetchone()
         if row:
@@ -118,6 +150,8 @@ def claim_job(job_id):
         exists = conn.execute("SELECT status FROM jobs WHERE id = %s", (job_id,)).fetchone()
     if exists is None:
         raise RuntimeError(f"chua thay job {job_id} trong DB")  # có thể do trễ, cho thử lại
+    if exists["status"] == "FAILED":
+        raise AlreadyFailed(job_id)
     return None  # đã DONE
 
 
@@ -141,7 +175,7 @@ def process_object(bucket, key):
         return False
 
     data = _s3.get_object(Bucket=bucket, Key=key)["Body"].read()
-    variants = make_variants(data)
+    variants = make_variants(data, shop_id)
     for name, body in variants.items():
         _s3.put_object(
             Bucket=config.PROCESSED_BUCKET,
@@ -172,26 +206,52 @@ def _records(body):
     return out
 
 
+def _retry_later(msg):
+    """Cho message hiện lại sau RETRY_VISIBILITY giây. Nhận đủ maxReceiveCount lần thì SQS tự chuyển sang DLQ."""
+    _sqs.change_message_visibility(
+        QueueUrl=config.QUEUE_URL,
+        ReceiptHandle=msg["ReceiptHandle"],
+        VisibilityTimeout=config.RETRY_VISIBILITY,
+    )
+
+
+def _job_ids(msg):
+    try:
+        ids = []
+        for _, key in _records(msg["Body"]):
+            parsed = naming.parse_original_key(key)
+            if parsed:
+                ids.append(parsed[1])
+        return ids
+    except Exception:
+        return []
+
+
 def handle_message(msg):
-    """Xử lý một message SQS. Trả về True nếu được phép xoá message."""
+    """Xử lý một message SQS. Trả về True nếu được phép xoá message.
+
+    Ảnh hỏng (lỗi vĩnh viễn): job FAILED nhưng KHÔNG xoá message, để SQS giao lại đủ 3 lần rồi
+    chuyển sang DLQ, alarm DLQ mới gửi được email. Chỉ message không gắn với job nào
+    (key lạ, không phải JSON) mới bị xoá vì thử lại hay vào DLQ cũng không giúp gì.
+    """
     receives = int(msg.get("Attributes", {}).get("ApproximateReceiveCount", 1))
     try:
         for bucket, key in _records(msg["Body"]):
             process_object(bucket, key)
         return True
+    except AlreadyFailed:
+        log.info("job da FAILED tu lan nhan truoc (lan %d), giu message de sang DLQ", receives)
+        _retry_later(msg)
+        return False
     except Exception as exc:
         permanent = isinstance(exc, PermanentError)
         log.warning("loi (lan nhan %d, %s): %s", receives, "vinh vien" if permanent else "tam thoi", exc)
+        if permanent and not _job_ids(msg):
+            return True
         if permanent or receives >= config.MAX_RECEIVES:
-            _mark_failed(msg, str(exc))
-        if permanent:
-            return True  # thử lại vô ích; không xoá thì cũng chỉ chạy lại 3 lần rồi vào DLQ
-        # Lỗi tạm: cho message hiện lại sớm. Quá MAX_RECEIVES thì SQS tự chuyển sang DLQ.
-        _sqs.change_message_visibility(
-            QueueUrl=config.QUEUE_URL,
-            ReceiptHandle=msg["ReceiptHandle"],
-            VisibilityTimeout=config.RETRY_VISIBILITY,
-        )
+            # Lỗi tạm quá số lần thử: chi tiết kỹ thuật đã ghi log ở trên, người dùng chỉ thấy câu dễ hiểu
+            _mark_failed(msg, str(exc) if permanent else "Xử lý thất bại sau nhiều lần thử. Hãy tải ảnh lên lại.")
+        _retry_later(msg)
         return False
 
 

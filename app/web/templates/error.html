@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card narrow">
+<section class="auth">
   <h1>Có lỗi xảy ra</h1>
-  <p>Máy chủ chưa xử lý được yêu cầu. Thử lại sau ít phút.</p>
-  <p><a href="{{ url_for('index') }}">Về trang chủ</a></p>
+  <p class="muted">Máy chủ chưa xử lý được yêu cầu. Thử lại sau ít phút.</p>
+  <a class="btn btn-primary" href="{{ url_for('index') }}">Về trang chủ</a>
 </section>
 {% endblock %}
