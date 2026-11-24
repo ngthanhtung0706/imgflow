@@ -132,12 +132,6 @@
     $("st-rate").textContent = stats.done_last_minute;
     $("st-avg").textContent = fmtSec(stats.avg_seconds);
     $("st-workers").textContent = stats.workers.length;
-    const box = $("workers");
-    box.replaceChildren(...stats.workers.map((w) => {
-      const chip = el("span", "worker" + (w.active ? " busy" : ""));
-      chip.append(el("span", "dot"), el("b", "", w.name), el("span", "muted", `${w.done} xong` + (w.active ? ` · ${w.active} đang làm` : "")));
-      return chip;
-    }));
   }
 
   // ---------------------------------------------------------------- lưới ảnh
@@ -167,7 +161,7 @@
     name.title = job.name;
     meta.append(name, el("span", "badge " + job.status, STATUS_TEXT[job.status] || job.status));
     if (job.status === "DONE" && job.duration_s != null) meta.append(el("div", "sub", "Xử lý " + fmtSec(job.duration_s)));
-    if (job.status === "FAILED") meta.append(el("div", "error", job.error || "Lỗi không rõ"));
+    if (job.status === "FAILED") meta.append(el("div", "error", job.error || "Lỗi không rõ."));
     item.append(thumb, meta);
     item.addEventListener("click", () => openModal(job.job_id));
     return item;
