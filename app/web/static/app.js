@@ -4,7 +4,8 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const STATUS_TEXT = { PENDING: "Chờ", PROCESSING: "Đang xử lý", DONE: "Xong", FAILED: "Lỗi" };
-  const VARIANT_TEXT = { full: "Gốc nén", "1080": "1080 px", "600": "600 px", thumb: "Thumb 200 px" };
+  const VARIANT_TEXT = { full: "Full", "1080": "1080 px", "600": "600 px", thumb: "Thumb" };
+  const VARIANT_ORDER = ["full", "1080", "600", "thumb"];
   const PARALLEL = 6;
   const POLL_MS = 3000;
 
@@ -26,14 +27,15 @@
     return e;
   }
 
+  const fmtNum = (n) => n.toLocaleString("vi-VN", { maximumFractionDigits: 1 });
   const fmtBytes = (n) => {
     if (n == null) return "–";
     if (n < 1024) return n + " B";
-    if (n < 1048576) return (n / 1024).toFixed(0) + " KB";
-    return (n / 1048576).toFixed(1) + " MB";
+    if (n < 1048576) return Math.round(n / 1024) + " KB";
+    return fmtNum(n / 1048576) + " MB";
   };
   const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString("vi-VN") : "–");
-  const fmtSec = (s) => (s == null ? "–" : s < 60 ? s.toFixed(1) + " giây" : Math.floor(s / 60) + " phút " + Math.round(s % 60) + " giây");
+  const fmtSec = (s) => (s == null ? "–" : s < 60 ? fmtNum(s) + " giây" : Math.floor(s / 60) + " phút " + Math.round(s % 60) + " giây");
 
   // ---------------------------------------------------------------- tải ảnh lên
   const form = $("upload-form");
@@ -122,7 +124,7 @@
     const pct = total ? Math.round((finished / total) * 100) : 0;
     $("st-bar").style.width = pct + "%";
     $("st-progress").setAttribute("aria-valuenow", pct);
-    $("st-pct").textContent = pct + "% đã xử lý xong";
+    $("st-pct").textContent = pct + "% đã xử lý";
 
     ["ALL", "PENDING", "PROCESSING", "DONE", "FAILED"].forEach((s) => {
       $("c-" + s).textContent = s === "ALL" ? total : summary[s] || 0;
@@ -160,7 +162,7 @@
     const name = el("div", "name", job.name);
     name.title = job.name;
     meta.append(name, el("span", "badge " + job.status, STATUS_TEXT[job.status] || job.status));
-    if (job.status === "DONE" && job.duration_s != null) meta.append(el("div", "sub", "Xử lý " + fmtSec(job.duration_s)));
+    if (job.status === "DONE" && job.duration_s != null) meta.append(el("span", "sub", fmtSec(job.duration_s)));
     if (job.status === "FAILED") meta.append(el("div", "error", job.error || "Lỗi không rõ."));
     item.append(thumb, meta);
     item.addEventListener("click", () => openModal(job.job_id));
@@ -176,7 +178,7 @@
       $("empty").hidden = false;
       $("empty").textContent = "Không có ảnh nào khớp bộ lọc.";
     } else {
-      $("empty").textContent = "Chưa có ảnh nào. Hãy tải ảnh lên ở phía trên.";
+      $("empty").textContent = "Chưa có ảnh nào. Hãy tải ảnh lên để bắt đầu.";
     }
     if (signature === state.signature) return; // không đổi thì không vẽ lại, ảnh khỏi nhấp nháy
     state.signature = signature;
@@ -242,7 +244,7 @@
       img.src = job.urls[state.variant];
       img.alt = job.name;
       preview.replaceChildren(img);
-      tabs.replaceChildren(...Object.keys(job.urls).map((v) => {
+      tabs.replaceChildren(...VARIANT_ORDER.filter((v) => job.urls[v]).map((v) => {
         const b = el("button", v === state.variant ? "active" : "", VARIANT_TEXT[v] || v);
         b.type = "button";
         b.addEventListener("click", () => { state.variant = v; state.modalSig = ""; renderModal(); });
@@ -316,6 +318,7 @@
     try {
       const [data, stats] = await Promise.all([api("/api/jobs"), api("/api/stats").catch(() => null)]);
       state.jobs = data.jobs;
+      $("updated").textContent = "Cập nhật lúc " + new Date().toLocaleTimeString("vi-VN");
       renderStats(data.summary, stats);
       renderGallery();
       if (state.modalId) renderModal();
