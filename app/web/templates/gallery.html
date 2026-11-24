@@ -1,42 +1,104 @@
 {% extends "base.html" %}
-{% block title %}Gallery · ImgFlow{% endblock %}
+{% block title %}Ảnh sản phẩm · ImgFlow{% endblock %}
 {% block content %}
-<section class="card">
-  <h1>Tải ảnh lên</h1>
-  <form id="upload-form">
-    <label>Sản phẩm (tuỳ chọn) <input name="product" maxlength="100" placeholder="Ví dụ: Áo thun trắng"></label>
-    <label>Ảnh (JPEG, PNG, WebP; chọn được nhiều ảnh)
-      <input name="files" type="file" accept="image/jpeg,image/png,image/webp" multiple required>
-    </label>
-    <button id="upload-btn">Tải lên</button>
-  </form>
-  <p id="upload-status" class="muted"></p>
+
+<div class="page-head">
+  <h1>Ảnh sản phẩm</h1>
+  <span class="updated muted" id="updated"></span>
+</div>
+
+<section class="stats" aria-label="Tình trạng xử lý">
+  <div class="stat-row">
+    <div class="stat"><span class="stat-num" id="st-total">0</span><span class="stat-label">Tổng số ảnh</span></div>
+    <div class="stat"><span class="stat-num" id="st-done">0</span><span class="stat-label"><i class="dot dot-DONE"></i>Đã xong</span></div>
+    <div class="stat"><span class="stat-num" id="st-active">0</span><span class="stat-label"><i class="dot dot-PROCESSING"></i>Đang chờ / xử lý</span></div>
+    <div class="stat"><span class="stat-num" id="st-failed">0</span><span class="stat-label"><i class="dot dot-FAILED"></i>Lỗi</span></div>
+    <div class="stat"><span class="stat-num" id="st-workers">0</span><span class="stat-label">Worker hoạt động</span></div>
+  </div>
+  <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Tiến độ xử lý" id="st-progress"><div id="st-bar"></div></div>
+  <p class="metrics muted"><span id="st-pct">0%</span> · <span id="st-rate">0</span> ảnh xong trong phút qua · trung bình <span id="st-avg">–</span> mỗi ảnh</p>
 </section>
 
-<section class="card">
-  <h1>Logo watermark của shop</h1>
-  <p class="muted">Logo này được đóng lên mọi ảnh của shop bạn. Chưa có logo thì dùng logo mặc định của ImgFlow.
-    Chỉ nhận PNG (nên có nền trong suốt), tối đa 512 KB. Chỉ áp dụng cho ảnh upload sau khi đổi logo.</p>
-  <div class="logo-box">
-    <img id="logo-preview" alt="Logo hiện tại" hidden>
-    <span id="logo-none" class="muted">Chưa có logo riêng.</span>
-  </div>
-  <form id="logo-form">
-    <label>Chọn logo (PNG) <input name="logo" type="file" accept="image/png" required></label>
-    <button id="logo-btn">Lưu logo</button>
-    <button id="logo-del" type="button" class="link" hidden>Xoá logo riêng</button>
-  </form>
-  <p id="logo-status" class="muted"></p>
-</section>
+<div class="layout">
+  <aside class="side">
+    <section class="panel" aria-labelledby="upload-title">
+      <h2 id="upload-title">Tải ảnh lên</h2>
+      <form id="upload-form">
+        <label>Sản phẩm <span class="optional">(không bắt buộc)</span>
+          <input name="product" maxlength="100" placeholder="Ví dụ: Áo thun trắng">
+        </label>
+        <label class="dropzone" id="dropzone">
+          <input name="files" id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple required>
+          <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+          <span class="dz-title">Kéo ảnh vào đây hoặc <u>chọn file</u></span>
+          <span class="dz-sub" id="dz-sub">JPEG, PNG, WebP · chọn được nhiều ảnh</span>
+        </label>
+        <button id="upload-btn" class="btn btn-primary btn-block">Tải lên</button>
+        <div class="progress progress-thin" id="up-progress" hidden><div id="up-bar"></div></div>
+      </form>
+      <p id="upload-status" class="status-line muted" role="status"></p>
+    </section>
 
-<section class="card">
-  <div class="row">
-    <h1>Ảnh của shop</h1>
-    <div id="summary" class="summary"></div>
+    <details class="panel collapsible">
+      <summary><h2>Logo watermark</h2><span class="muted">Tuỳ chỉnh</span></summary>
+      <div class="logo-row">
+        <div class="logo-box">
+          <img id="logo-preview" alt="Logo hiện tại" hidden>
+          <span id="logo-none">Mặc định</span>
+        </div>
+        <div class="logo-text">
+          <div class="logo-name" id="logo-name">Logo mặc định</div>
+          <div class="muted small">PNG nền trong suốt, tối đa 512 KB</div>
+        </div>
+      </div>
+      <form id="logo-form" class="logo-actions">
+        <label class="btn btn-secondary file-btn" id="logo-pick"><input name="logo" type="file" accept="image/png" aria-label="Chọn file logo PNG">Chọn logo</label>
+        <button id="logo-del" type="button" class="link-btn small" hidden>Dùng logo mặc định</button>
+      </form>
+      <p id="logo-status" class="status-line muted" role="status"></p>
+    </details>
+  </aside>
+
+  <section class="main" aria-label="Danh sách ảnh">
+    <div class="tabs" id="filters" role="tablist" aria-label="Lọc theo trạng thái">
+      <button class="chip active" data-status="ALL">Tất cả <b id="c-ALL">0</b></button>
+      <button class="chip" data-status="PENDING">Chờ <b id="c-PENDING">0</b></button>
+      <button class="chip" data-status="PROCESSING">Đang xử lý <b id="c-PROCESSING">0</b></button>
+      <button class="chip" data-status="DONE">Xong <b id="c-DONE">0</b></button>
+      <button class="chip" data-status="FAILED">Lỗi <b id="c-FAILED">0</b></button>
+    </div>
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Tìm theo tên file hoặc sản phẩm" aria-label="Tìm ảnh">
+      <label class="check"><input type="checkbox" id="group"> Nhóm theo sản phẩm</label>
+      <span class="muted small" id="result-count"></span>
+    </div>
+    <div id="gallery"></div>
+    <p id="empty" class="empty muted">Chưa có ảnh nào. Hãy tải ảnh lên để bắt đầu.</p>
+  </section>
+</div>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="m-title">
+    <div class="modal-head">
+      <h3 id="m-title"></h3>
+      <button class="link-btn" data-close aria-label="Đóng">Đóng</button>
+    </div>
+    <div class="m-body">
+      <div class="m-preview" id="m-preview"></div>
+      <div class="m-info">
+        <div class="variant-tabs" id="m-variants"></div>
+        <dl class="info" id="m-info"></dl>
+        <p class="error small" id="m-error" hidden></p>
+        <a class="btn btn-secondary" id="m-open" target="_blank" rel="noopener" hidden>Mở ảnh trong tab mới</a>
+      </div>
+    </div>
+    <div class="m-nav">
+      <button class="link-btn" id="m-prev">← Ảnh trước</button>
+      <button class="link-btn" id="m-next">Ảnh sau →</button>
+    </div>
   </div>
-  <div id="grid" class="grid"></div>
-  <p id="empty" class="muted">Chưa có ảnh nào.</p>
-</section>
+</div>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script src="{{ url_for('static', filename='logo.js') }}"></script>

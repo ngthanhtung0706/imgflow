@@ -134,7 +134,7 @@ def test_file_hong_thanh_FAILED_va_giu_message_de_vao_dlq(env):
     # Lần nhận 1: job FAILED, message KHÔNG bị xoá (return False) để SQS còn giao lại
     assert worker.handle_message(_message(key, receives=1) | {"ReceiptHandle": receipt}) is False
     st = _status(job_id)
-    assert st["status"] == "FAILED" and "anh" in st["error"]
+    assert st["status"] == "FAILED" and st["error"] == "File bị hỏng hoặc không phải ảnh."
     # thông báo cho người dùng không lộ chi tiết kỹ thuật của Pillow
     assert "BytesIO" not in st["error"] and "0x" not in st["error"]
 

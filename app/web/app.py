@@ -98,10 +98,16 @@ def _job_json(row):
         "product": row.get("product_name"),
         "attempts": row["attempts"],
         "error": row["error"],
+        "worker": row.get("worker"),
+        "size_bytes": row.get("size_bytes"),
         "created_at": row["created_at"].isoformat(),
+        "started_at": row["started_at"].isoformat() if row.get("started_at") else None,
         "finished_at": row["finished_at"].isoformat() if row["finished_at"] else None,
+        "duration_s": None,
         "urls": None,
     }
+    if row.get("started_at") and row["finished_at"]:
+        data["duration_s"] = round((row["finished_at"] - row["started_at"]).total_seconds(), 1)
     if row["status"] == "DONE":
         data["urls"] = {
             v: _cdn_url(naming.processed_key(row["shop_id"], row["id"], v)) for v, _, _ in naming.VARIANTS
@@ -276,12 +282,12 @@ def upload_logo():
     """Shop upload logo watermark riêng (form-data, trường 'logo', PNG tối đa 512 KB)."""
     f = request.files.get("logo")
     if f is None:
-        return jsonify(error="chua chon file logo"), 400
+        return jsonify(error="Chưa chọn file logo."), 400
     data = f.read(MAX_LOGO_BYTES + 1)
     if len(data) > MAX_LOGO_BYTES:
-        return jsonify(error="logo toi da 512 KB"), 400
+        return jsonify(error="Logo tối đa 512 KB."), 400
     if not data.startswith(PNG_SIGNATURE):
-        return jsonify(error="logo phai la file PNG"), 400
+        return jsonify(error="Logo phải là file PNG."), 400
     with db.connect() as conn:
         conn.execute("UPDATE shops SET logo = %s WHERE id = %s", (data, session["shop_id"]))
     log.info("shop=%s cap nhat logo (%d byte)", session["shop_id"], len(data))
@@ -298,8 +304,8 @@ def delete_logo():
 
 
 _JOB_SELECT = """
-SELECT j.id, j.shop_id, j.status, j.attempts, j.error, j.created_at, j.finished_at,
-       i.original_name, p.name AS product_name
+SELECT j.id, j.shop_id, j.status, j.attempts, j.error, j.worker, j.created_at, j.started_at, j.finished_at,
+       i.original_name, i.size_bytes, p.name AS product_name
 FROM jobs j
 JOIN images i ON i.id = j.image_id
 LEFT JOIN products p ON p.id = i.product_id
@@ -322,6 +328,39 @@ def list_jobs():
     summary = {s: 0 for s in db.JOB_STATUSES}
     summary.update({r["status"]: r["n"] for r in counts})
     return jsonify(summary=summary, jobs=[_job_json(r) for r in rows])
+
+
+@app.get("/api/stats")
+@login_required
+def stats():
+    """Số liệu cho bảng theo dõi xử lý của shop: tốc độ, thời gian xử lý, các worker gần đây."""
+    shop_id = session["shop_id"]
+    with db.connect() as conn:
+        per_minute = conn.execute(
+            "SELECT count(*) AS n FROM jobs WHERE shop_id = %s AND status = 'DONE' "
+            "AND finished_at > now() - interval '60 seconds'",
+            (shop_id,),
+        ).fetchone()["n"]
+        avg = conn.execute(
+            "SELECT avg(extract(epoch FROM finished_at - started_at)) AS s FROM ("
+            "  SELECT started_at, finished_at FROM jobs WHERE shop_id = %s AND status = 'DONE' "
+            "  AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 100"
+            ") t",
+            (shop_id,),
+        ).fetchone()["s"]
+        workers = conn.execute(
+            "SELECT worker, count(*) FILTER (WHERE status = 'PROCESSING') AS active, "
+            "       count(*) FILTER (WHERE status = 'DONE') AS done "
+            "FROM jobs WHERE shop_id = %s AND worker IS NOT NULL "
+            "AND (status = 'PROCESSING' OR started_at > now() - interval '5 minutes') "
+            "GROUP BY worker ORDER BY worker",
+            (shop_id,),
+        ).fetchall()
+    return jsonify(
+        done_last_minute=per_minute,
+        avg_seconds=round(float(avg), 1) if avg is not None else None,
+        workers=[{"name": w["worker"], "active": w["active"], "done": w["done"]} for w in workers],
+    )
 
 
 @app.get("/api/jobs/<job_id>")

@@ -107,7 +107,7 @@ def make_variants(data, shop_id=None):
         src.load()
     except Exception as exc:  # Pillow ném nhiều loại lỗi khác nhau cho file hỏng
         log.warning("Pillow khong doc duoc anh: %s", exc)  # chi tiet ky thuat chi ghi vao log
-        raise PermanentError("khong doc duoc anh (file hong hoac khong phai anh)") from exc
+        raise PermanentError("File bị hỏng hoặc không phải ảnh.") from exc
 
     src = ImageOps.exif_transpose(src)
     if src.mode in ("RGBA", "LA", "P"):
@@ -249,7 +249,8 @@ def handle_message(msg):
         if permanent and not _job_ids(msg):
             return True
         if permanent or receives >= config.MAX_RECEIVES:
-            _mark_failed(msg, str(exc))
+            # Lỗi tạm quá số lần thử: chi tiết kỹ thuật đã ghi log ở trên, người dùng chỉ thấy câu dễ hiểu
+            _mark_failed(msg, str(exc) if permanent else "Xử lý thất bại sau nhiều lần thử. Hãy tải ảnh lên lại.")
         _retry_later(msg)
         return False
 
