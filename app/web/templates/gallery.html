@@ -8,19 +8,15 @@
 </div>
 
 <section class="stats" aria-label="Tình trạng xử lý">
-  <div class="stat"><span class="stat-num" id="st-total">0</span><span class="stat-label">Tổng số ảnh</span></div>
-  <div class="stat"><span class="stat-num" id="st-done">0</span><span class="stat-label"><i class="dot dot-DONE"></i>Đã xong</span></div>
-  <div class="stat"><span class="stat-num" id="st-active">0</span><span class="stat-label"><i class="dot dot-PROCESSING"></i>Đang chờ / xử lý</span></div>
-  <div class="stat"><span class="stat-num" id="st-failed">0</span><span class="stat-label"><i class="dot dot-FAILED"></i>Lỗi</span></div>
-  <div class="stats-foot">
-    <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="st-progress"><div id="st-bar"></div></div>
-    <p class="metrics muted">
-      <span id="st-pct">0%</span> ·
-      <span id="st-rate">0</span> ảnh xong trong phút qua ·
-      trung bình <span id="st-avg">–</span> mỗi ảnh ·
-      <span id="st-workers">0</span> worker hoạt động
-    </p>
+  <div class="stat-row">
+    <div class="stat"><span class="stat-num" id="st-total">0</span><span class="stat-label">Tổng số ảnh</span></div>
+    <div class="stat"><span class="stat-num" id="st-done">0</span><span class="stat-label"><i class="dot dot-DONE"></i>Đã xong</span></div>
+    <div class="stat"><span class="stat-num" id="st-active">0</span><span class="stat-label"><i class="dot dot-PROCESSING"></i>Đang chờ / xử lý</span></div>
+    <div class="stat"><span class="stat-num" id="st-failed">0</span><span class="stat-label"><i class="dot dot-FAILED"></i>Lỗi</span></div>
+    <div class="stat"><span class="stat-num" id="st-workers">0</span><span class="stat-label">Worker hoạt động</span></div>
   </div>
+  <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Tiến độ xử lý" id="st-progress"><div id="st-bar"></div></div>
+  <p class="metrics muted"><span id="st-pct">0%</span> · <span id="st-rate">0</span> ảnh xong trong phút qua · trung bình <span id="st-avg">–</span> mỗi ảnh</p>
 </section>
 
 <div class="layout">
