@@ -25,7 +25,6 @@ h3 { font-size: 17px; margin: 0 0 12px; word-break: break-word; }
 /* thanh trên */
 .topbar { display: flex; align-items: center; gap: 14px; padding: 10px 24px; background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
 .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; font-weight: 700; font-size: 18px; color: var(--text); text-decoration: none; }
-.brand-mark { display: block; width: 30px; height: 30px; color: var(--accent); flex: none; }
 .shop-chip { padding: 3px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-dark); font-size: 14px; font-weight: 600; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .footer { text-align: center; color: var(--muted); font-size: 13px; padding: 20px 16px; }
 
@@ -38,7 +37,8 @@ label { display: block; margin-bottom: 14px; font-weight: 500; }
 input[type=text], input[type=search], input[type=password], input:not([type]) { display: block; width: 100%; margin-top: 5px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: var(--card); color: var(--text); }
 input:focus-visible, button:focus-visible, a:focus-visible, .dropzone:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 input[type=file] { display: block; margin-top: 5px; max-width: 100%; }
-.hint { display: block; margin-top: 3px; font-size: 13px; font-weight: 400; color: var(--muted); }
+.hint { display: none; margin-top: 3px; font-size: 13px; font-weight: 400; color: var(--muted); }
+label:focus-within .hint { display: block; }
 .muted { color: var(--muted); }
 .error { color: var(--err); }
 .small { font-size: 13px; }

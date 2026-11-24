@@ -3,7 +3,6 @@
 {% block content %}
 <section class="card narrow auth">
   <h1>Tạo shop</h1>
-  <p class="muted">Mỗi shop có kho ảnh và logo watermark riêng.</p>
   {% if error %}<p class="alert alert-error" role="alert">{{ error }}</p>{% endif %}
   <form method="post">
     <label>Tên đăng nhập <input name="username" required pattern="[A-Za-z0-9_\-]+" autofocus autocomplete="username">
